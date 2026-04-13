@@ -1,0 +1,6 @@
+{
+  "command": "/Users/pedro/code/one-click-mlx/test-harness/work/pr-5/d6a3190/.venv/bin/mlx_lm.generate --model /Users/pedro/code/one-click-mlx/test-harness/work/pr-5/d6a3190/quantized/allenai--Olmo-Hybrid-Instruct-SFT-7B --prompt Explain how a transformer neural network processes a sentence, step by step. --max-tokens 200",
+  "exit_code": 0,
+  "stdout": "==========\nA transformer neural network processes a sentence by encoding the input into a sequence of vectors, then using self-attention mechanisms to weigh the importance of each word in the sentence. The output is a sequence of vectors that can be used for a variety of tasks, such as translation or sentiment analysis.\n==========\nPrompt: 51 tokens, 484.163 tokens-per-sec\nGeneration: 59 tokens, 107.997 tokens-per-sec\nPeak memory: 4.439 GB\n",
+  "stderr": ""
+}
