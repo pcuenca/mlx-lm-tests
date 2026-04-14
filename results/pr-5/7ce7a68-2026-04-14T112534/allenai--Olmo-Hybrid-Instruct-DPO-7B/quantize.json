@@ -1,0 +1,6 @@
+{
+  "command": "/Users/pedro/code/one-click-mlx/test-harness/work/pr-5/7ce7a68/.venv/bin/mlx_lm.convert --hf-path allenai/Olmo-Hybrid-Instruct-DPO-7B -q --q-bits 4 --mlx-path /Users/pedro/code/one-click-mlx/test-harness/work/pr-5/7ce7a68/quantized/allenai--Olmo-Hybrid-Instruct-DPO-7B",
+  "exit_code": 1,
+  "stdout": "",
+  "stderr": "Traceback (most recent call last):\n  File \"/Users/pedro/code/one-click-mlx/test-harness/work/pr-5/7ce7a68/.venv/bin/mlx_lm.convert\", line 10, in <module>\n    sys.exit(main())\n             ^^^^^^\n  File \"/Users/pedro/code/one-click-mlx/test-harness/work/pr-5/7ce7a68/mlx-lm/mlx_lm/convert.py\", line 259, in main\n    convert(**vars(args))\n  File \"/Users/pedro/code/one-click-mlx/test-harness/work/pr-5/7ce7a68/mlx-lm/mlx_lm/convert.py\", line 106, in convert\n    raise ValueError(\nValueError: Cannot save to the path /Users/pedro/code/one-click-mlx/test-harness/work/pr-5/7ce7a68/quantized/allenai--Olmo-Hybrid-Instruct-DPO-7B as it already exists. Please delete the file/directory or specify a new path to save to.\n"
+}

@@ -1,0 +1,6 @@
+{
+  "command": "/Users/pedro/code/one-click-mlx/test-harness/work/pr-5/7ce7a68/.venv/bin/python /Users/pedro/code/one-click-mlx/test-harness/harness/check_dtype.py allenai/Olmo-Hybrid-Instruct-DPO-7B bfloat16",
+  "exit_code": 0,
+  "stdout": "{\n  \"output_dtype\": \"mlx.core.bfloat16\",\n  \"expected_dtype\": \"mlx.core.bfloat16\",\n  \"match\": true\n}\n",
+  "stderr": "\nFetching 6 files:   0%|          | 0/6 [00:00<?, ?it/s]\nFetching 6 files: 100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 6/6 [00:00<00:00, 12294.00it/s]\n"
+}
