@@ -4,13 +4,19 @@ Layer-by-layer comparison between transformers and MLX.
 
 Single forward pass per framework:
   - Transformers: uses `output_hidden_states=True`.
-  - MLX: temporarily wraps each entry in `model.model.layers` (and the
-    embedding) to capture the output, then restores the originals.
+  - MLX: temporarily wraps each entry in `model.model.layers` to capture
+    the output, then restores the originals.
 
-Works on any mlx-lm model that follows the standard structure
-(`model.model.layers` is a list, `model.model.embed_tokens` is the embedding).
+Compares per-layer outputs (post-layer-0 through post-layer-(N-1)) and the
+post-final-norm state. Skips the embedding to avoid model-specific
+pre-layer scaling that differs across architectures.
 
-Usage: python compare_layers.py <model_path> [prompt]
+Works on any mlx-lm model where `model.[language_model.]model.layers` is
+a list and `model.[language_model.]model.norm` is the final norm.
+
+Usage:
+    python compare_layers.py <model_path> [prompt]
+    python compare_layers.py <model_path> [prompt] --t-dtype float32
 """
 
 import gc
@@ -19,9 +25,53 @@ import sys
 import numpy as np
 
 
+# ---------------------------------------------------------------------------
+# Find the inner module that holds layers + norm
+# ---------------------------------------------------------------------------
+
 def _inner(model):
-    """Return the inner submodule that holds `layers` and `embed_tokens`."""
-    return model.model if hasattr(model, "model") else model
+    """Walk down nested submodule attrs to find the module with both
+    `layers` and `norm`.
+    """
+    current = model
+    visited = set()
+    for _ in range(5):
+        if id(current) in visited:
+            break
+        visited.add(id(current))
+        if hasattr(current, "layers") and hasattr(current, "norm"):
+            return current
+        for attr in ("language_model", "text_model", "model"):
+            if hasattr(current, attr):
+                current = getattr(current, attr)
+                break
+        else:
+            break
+    return current
+
+
+# ---------------------------------------------------------------------------
+# Wrapping helper
+# ---------------------------------------------------------------------------
+
+class _Capture:
+    """Callable wrapper that records the (first) output of `wrapped`.
+
+    Attribute access is forwarded to the wrapped object so that callers
+    that read layer flags (e.g. `layer.use_sliding`) keep working.
+    """
+    def __init__(self, wrapped, sink):
+        object.__setattr__(self, "wrapped", wrapped)
+        object.__setattr__(self, "sink", sink)
+
+    def __call__(self, *args, **kwargs):
+        out = self.wrapped(*args, **kwargs)
+        hidden = out[0] if isinstance(out, tuple) else out
+        self.sink.append(hidden)
+        return out
+
+    def __getattr__(self, name):
+        return getattr(self.wrapped, name)
 
 
 # ---------------------------------------------------------------------------
@@ -29,12 +79,15 @@ def _inner(model):
 # ---------------------------------------------------------------------------
 
 def collect_transformers_states(model_path, input_ids, dtype):
-    """Return a list of numpy arrays, one per `hidden_states` entry.
+    """Return layer outputs as numpy arrays.
 
-    `outputs.hidden_states` has length `num_layers + 1`:
-      - [0] is the input to the first decoder layer (post-embedding,
-        post any pre-layer transforms applied by the model).
-      - [i+1] is the output of layer i.
+    `outputs.hidden_states` layout:
+      - [0] = pre-layer-0 (embedding + pre-processing)
+      - [i] = pre-layer-i = post-layer-(i-1)   for 1 <= i <= N-1
+      - [N] = post-final-norm
+
+    We return [post-layer-0, ..., post-layer-(N-2), post-final-norm],
+    i.e., hidden_states[1:].  Length = N.
     """
     import torch
     from transformers import AutoModelForCausalLM
@@ -49,8 +102,8 @@ def collect_transformers_states(model_path, input_ids, dtype):
     with torch.no_grad():
         outputs = model(inputs, output_hidden_states=True)
 
-    # Cast to float32 for comparison (avoids np.array() failures on bf16)
-    states = [h[0].float().numpy() for h in outputs.hidden_states]
+    # Skip [0] (embedding), take [1:] (layer outputs + post-norm)
+    states = [h[0].float().numpy() for h in outputs.hidden_states[1:]]
 
     del model, outputs
     gc.collect()
@@ -61,26 +114,12 @@ def collect_transformers_states(model_path, input_ids, dtype):
 # MLX
 # ---------------------------------------------------------------------------
 
-class _Capture:
-    """Callable wrapper that records the (first) output of `wrapped`.
-
-    Not an `nn.Module` — we want it to be invisible to parameter tracking
-    and just intercept the call. Since mlx-lm stores layers in a plain
-    Python list, swapping in a non-Module callable works fine for inference.
-    """
-    def __init__(self, wrapped, sink):
-        self.wrapped = wrapped
-        self.sink = sink
-
-    def __call__(self, *args, **kwargs):
-        out = self.wrapped(*args, **kwargs)
-        hidden = out[0] if isinstance(out, tuple) else out
-        self.sink.append(hidden)
-        return out
-
-
 def collect_mlx_states(model_path, input_ids):
-    """Return (states, dtype_str) — states is a list of numpy arrays."""
+    """Return (states, dtype_str).
+
+    states = [post-layer-0, ..., post-layer-(N-1), post-final-norm].
+    Length = N + 1 if final norm exists, N otherwise.
+    """
     import mlx.core as mx
     from mlx_lm import load
 
@@ -88,19 +127,17 @@ def collect_mlx_states(model_path, input_ids):
     model, _ = load(model_path)
     inner = _inner(model)
 
-    if not hasattr(inner, "layers") or not hasattr(inner, "embed_tokens"):
+    if not hasattr(inner, "layers"):
         raise RuntimeError(
             "MLX model does not follow the expected mlx-lm structure "
-            "(`model.model.layers` and `model.model.embed_tokens`)."
+            "(`model.[language_model.]model.layers`)."
         )
 
     captured = []
     layers = inner.layers
     original_layers = list(layers)
-    original_embed = inner.embed_tokens
 
     try:
-        inner.embed_tokens = _Capture(original_embed, captured)
         for i in range(len(layers)):
             layers[i] = _Capture(original_layers[i], captured)
 
@@ -109,13 +146,18 @@ def collect_mlx_states(model_path, input_ids):
         mx.eval(out)
         for h in captured:
             mx.eval(h)
+
+        # Align with transformers: hidden_states[-1] is post-final-norm,
+        # not the raw output of the last layer. Replace to match.
+        if hasattr(inner, "norm") and captured:
+            normed = inner.norm(captured[-1])
+            mx.eval(normed)
+            captured[-1] = normed
     finally:
-        inner.embed_tokens = original_embed
         for i in range(len(layers)):
             layers[i] = original_layers[i]
 
     states = [np.array(h[0].astype(mx.float32)) for h in captured]
-    # Sniff MLX runtime dtype from the model's forward output
     runtime_dtype = str(out.dtype).rsplit(".", 1)[-1]
     return states, runtime_dtype
 
@@ -124,64 +166,70 @@ def collect_mlx_states(model_path, input_ids):
 # Comparison
 # ---------------------------------------------------------------------------
 
-def label(i, n_states):
-    if i == 0:
-        return "embed"
-    return f"layer {i - 1}"
-
-
-def compare(tf_states, mlx_states):
-    n = min(len(tf_states), len(mlx_states))
-    if len(tf_states) != len(mlx_states):
-        print(f"\nWARNING: state count mismatch — TF={len(tf_states)}, "
+def compare(t_states, mlx_states, num_layers):
+    n = min(len(t_states), len(mlx_states))
+    if len(t_states) != len(mlx_states):
+        print(f"\nWARNING: state count mismatch — T={len(t_states)}, "
               f"MLX={len(mlx_states)}. Comparing first {n}.")
 
     print()
-    header = f"{'pos':<8} {'shape':<22} {'max diff':>11} {'mean diff':>11} {'TF mean':>11} {'MLX mean':>11}  status"
+    header = (f"{'pos':<10} {'max diff':>10} {'mean diff':>10} "
+              f"{'max |T|':>10} {'max |MLX|':>10} {'rel diff':>10}  status")
     print(header)
     print("-" * len(header))
 
     first_div = None
     for i in range(n):
-        tf, mlx_ = tf_states[i], mlx_states[i]
-        if tf.shape != mlx_.shape:
-            print(f"{label(i, n):<8} SHAPE MISMATCH  TF={tf.shape}  MLX={mlx_.shape}")
+        t, mlx_ = t_states[i], mlx_states[i]
+
+        # Label: layer outputs, then post-norm
+        if i < num_layers:
+            lbl = f"layer {i}"
+        else:
+            lbl = "final*"
+
+        if t.shape != mlx_.shape:
+            print(f"{lbl:<10} SHAPE MISMATCH  T={t.shape}  MLX={mlx_.shape}")
             continue
 
-        diff = np.abs(tf - mlx_)
+        diff = np.abs(t - mlx_)
         max_d, mean_d = diff.max(), diff.mean()
+        max_t = np.abs(t).max()
+        max_mlx = np.abs(mlx_).max()
+        rel = max_d / max_t if max_t > 0 else float("inf")
 
-        if max_d < 1e-2:
+        if rel < 0.01:
             status = "ok"
-        elif max_d < 1.0:
+        elif rel < 0.10:
             status = "warn"
         else:
             status = "DIVERGED"
             if first_div is None:
                 first_div = i
 
-        print(f"{label(i, n):<8} {str(tf.shape):<22} "
-              f"{max_d:>11.4e} {mean_d:>11.4e} "
-              f"{tf.mean():>11.4f} {mlx_.mean():>11.4f}  {status}")
+        print(f"{lbl:<10} {max_d:>10.4f} {mean_d:>10.4f} "
+              f"{max_t:>10.2f} {max_mlx:>10.2f} {rel:>9.2%}  {status}")
 
     print()
     if first_div is not None:
-        print(f"First significant divergence at {label(first_div, n)}.")
+        lbl = f"layer {first_div}" if first_div < num_layers else "final*"
+        print(f"First significant divergence at {lbl} "
+              f"(>10% of signal magnitude).")
     else:
-        print("All compared states within tolerance.")
+        print("All layers within tolerance (<10% of signal magnitude).")
 
 
 # ---------------------------------------------------------------------------
 
 def main():
     import argparse
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description="Layer-by-layer comparison between transformers and MLX.")
     parser.add_argument("model_path")
     parser.add_argument("prompt", nargs="?", default="The")
-    parser.add_argument("--tf-dtype", default=None,
+    parser.add_argument("--t-dtype", default=None,
                         help="dtype for the transformers model "
-                             "(default: match MLX runtime dtype, typically bfloat16). "
-                             "Use 'float32' for a higher-precision reference.")
+                             "(default: match MLX runtime dtype)")
     args = parser.parse_args()
 
     print(f"Model: {args.model_path}")
@@ -192,14 +240,18 @@ def main():
     input_ids = tokenizer.encode(args.prompt)
     print(f"Token count: {len(input_ids)}")
 
-    # Run MLX first so we know its runtime dtype, then load TF with the same.
+    # Run MLX first to detect runtime dtype, then match in transformers.
     mlx_states, mlx_dtype = collect_mlx_states(args.model_path, input_ids)
-    tf_dtype = args.tf_dtype or mlx_dtype
-    tf_states = collect_transformers_states(args.model_path, input_ids, tf_dtype)
+    t_dtype = args.t_dtype or mlx_dtype
+    t_states = collect_transformers_states(args.model_path, input_ids, t_dtype)
 
-    print(f"\nCollected {len(tf_states)} TF states, {len(mlx_states)} MLX states "
-          f"(TF dtype={tf_dtype}, MLX dtype={mlx_dtype})")
-    compare(tf_states, mlx_states)
+    # Number of decoder layers = total states minus the post-norm entry.
+    # If MLX didn't find a final norm, all states are layer outputs.
+    num_layers = len(mlx_states) - 1 if len(mlx_states) == len(t_states) else len(mlx_states)
+
+    print(f"\nCollected {len(t_states)} transformers states, {len(mlx_states)} MLX states "
+          f"(transformers dtype={t_dtype}, MLX dtype={mlx_dtype})")
+    compare(t_states, mlx_states, num_layers)
 
 
 if __name__ == "__main__":
