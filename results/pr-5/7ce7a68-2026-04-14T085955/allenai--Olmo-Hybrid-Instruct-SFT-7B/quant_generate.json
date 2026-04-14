@@ -1,6 +1,0 @@
-{
-  "command": "/Users/pedro/code/one-click-mlx/test-harness/work/pr-5/7ce7a68/.venv/bin/mlx_lm.generate --model /Users/pedro/code/one-click-mlx/test-harness/work/pr-5/7ce7a68/quantized/allenai--Olmo-Hybrid-Instruct-SFT-7B --prompt Explain how a transformer neural network processes a sentence, step by step. --max-tokens 200",
-  "exit_code": 0,
-  "stdout": "==========\nA transformer neural network processes a sentence by encoding the input sequence into a fixed-length vector representation using self-attention mechanisms. The input sentence is first tokenized into individual words or subwords, and each token is represented as a vector. The transformer then processes the input sequence through multiple layers of self-attention, where each token is compared with every other token in the sequence to determine its importance relative to the others. The self-attention mechanism allows the model to capture long-range dependencies and relationships between words in the sentence. The output of the transformer is a fixed-length vector representation of the input sentence, which can be used for various natural language processing tasks such as sentiment analysis, question answering, and machine translation.\n==========\nPrompt: 51 tokens, 514.463 tokens-per-sec\nGeneration: 143 tokens, 105.306 tokens-per-sec\nPeak memory: 4.427 GB\n",
-  "stderr": ""
-}

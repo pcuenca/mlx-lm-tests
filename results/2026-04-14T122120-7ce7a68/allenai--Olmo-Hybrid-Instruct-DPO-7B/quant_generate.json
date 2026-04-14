@@ -1,0 +1,6 @@
+{
+  "command": "/Users/pedro/code/one-click-mlx/test-harness/work/pr-5/7ce7a68/.venv/bin/mlx_lm.generate --model /Users/pedro/code/one-click-mlx/test-harness/work/pr-5/7ce7a68/quantized/allenai--Olmo-Hybrid-Instruct-DPO-7B --prompt Explain how a transformer neural network processes a sentence, step by step. --max-tokens 200",
+  "exit_code": 0,
+  "stdout": "==========\nCertainly! A **Transformer neural network** (like those in BERT, GPT, or T5) is a state-of-the-art architecture for understanding and generating language. Here\u2019s a **step-by-step explanation** of how a Transformer processes a sentence:\n\n---\n\n## **1. Tokenization**\n- **Input sentence** (e.g., *\"The cat sat on the mat.\"*) is split into **tokens** (subwords or words).\n- **Special tokens** are added:\n  - `[CLS]` (for classification tasks)\n  - `[SEP]` (to separate sentences in a pair)\n  - Padding tokens if lengths differ.\n- **Example tokens:** `[CLS] the cat [SEP] sat on the mat [SEP]`\n\n---\n\n## **2. Embedding**\n- Each token is mapped to a **vector** (embedding) using a **token embedding matrix**.\n- These embeddings capture semantic and syntactic information.\n\n---\n\n## **3. Positional Encoding**\n\n==========\nPrompt: 51 tokens, 509.714 tokens-per-sec\nGeneration: 200 tokens, 105.515 tokens-per-sec\nPeak memory: 4.424 GB\n",
+  "stderr": ""
+}

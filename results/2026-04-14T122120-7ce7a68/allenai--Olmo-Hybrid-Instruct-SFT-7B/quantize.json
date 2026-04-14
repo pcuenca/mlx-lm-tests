@@ -1,0 +1,6 @@
+{
+  "command": "/Users/pedro/code/one-click-mlx/test-harness/work/pr-5/7ce7a68/.venv/bin/mlx_lm.convert --hf-path allenai/Olmo-Hybrid-Instruct-SFT-7B -q --q-bits 4 --mlx-path /Users/pedro/code/one-click-mlx/test-harness/work/pr-5/7ce7a68/quantized/allenai--Olmo-Hybrid-Instruct-SFT-7B",
+  "exit_code": 0,
+  "stdout": "[INFO] Loading\n[INFO] Quantizing\n[INFO] Quantized model with 4.502 bits per weight.\n",
+  "stderr": "\nFetching 8 files:   0%|          | 0/8 [00:00<?, ?it/s]\nFetching 8 files: 100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 8/8 [00:00<00:00, 7166.69it/s]\n"
+}
