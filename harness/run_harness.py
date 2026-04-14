@@ -265,9 +265,15 @@ def run_battery(variant, python, output_dir, work_dir, quantize):
         "--model", model, "--prompt", gen_prompt, "--max-tokens", "200",
     ], output_dir, timeout=300)
 
-    # Test 3: numerical comparison
+    # Test 3: numerical comparison (forward pass)
     run_test("predictions", [
         python, str(HARNESS_DIR / "compare_predictions.py"),
+        model, NUMERICAL_PROMPT,
+    ], output_dir, timeout=900)
+
+    # Test 4: layer-by-layer comparison
+    run_test("layers", [
+        python, str(HARNESS_DIR / "compare_layers.py"),
         model, NUMERICAL_PROMPT,
     ], output_dir, timeout=900)
 
@@ -281,7 +287,10 @@ def run_battery(variant, python, output_dir, work_dir, quantize):
         return
 
     # Phase 5: quantize
-    quant_dir = str(work_dir / "quantized" / variant["repo_id"].replace("/", "--"))
+    quant_dir = work_dir / "quantized" / variant["repo_id"].replace("/", "--")
+    if quant_dir.exists():
+        shutil.rmtree(quant_dir)
+    quant_dir = str(quant_dir)
     ok = run_test("quantize", [
         mlx_convert,
         "--hf-path", model, "-q", "--q-bits", "4", "--mlx-path", quant_dir,
@@ -304,6 +313,11 @@ def run_battery(variant, python, output_dir, work_dir, quantize):
 # ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
+
+def _anchor(repo_id):
+    """Convert a repo_id to the GitHub markdown anchor for its detail heading."""
+    return repo_id.lower().replace("/", "").replace(".", "").replace(" ", "-")
+
 
 PREDICTIONS_PATTERNS = {
     "max_diff": re.compile(r"Absolute diff -.*?max:\s*([\d.eE+-]+)"),
@@ -354,13 +368,94 @@ def predictions_table(manifest, results_dir, suffix=""):
         "|---|---|---|---|---|---|---|---|",
     ]
     for repo_id, m, error in rows:
+        anchor = _anchor(repo_id)
         if error:
-            lines.append(f"| `{repo_id}` | — | — | — | — | — | — | _{error}_ |")
+            lines.append(f"| [`{repo_id}`](#{anchor}) | — | — | — | — | — | — | _{error}_ |")
         else:
             lines.append(
-                f"| `{repo_id}` | {m['max_diff']} | {m['mean_diff']} | "
+                f"| [`{repo_id}`](#{anchor}) | {m['max_diff']} | {m['mean_diff']} | "
                 f"{m['within_1e-2']}% | {m['within_1e-1']}% | "
                 f"{m['top1']} | {m['top5']} | {m['top10']} |"
+            )
+    return "\n".join(lines)
+
+
+LAYERS_LINE = re.compile(
+    r"^(layer \d+|post-norm|logits)\s+"
+    r"([\d.]+)\s+([\d.]+)\s+"
+    r"([\d.]+)\s+([\d.]+)\s+"
+    r"([\d.]+%)\s+(\w+)"
+)
+
+
+def parse_layers(stdout):
+    """Extract per-position metrics from compare_layers stdout."""
+    rows = []
+    for line in stdout.splitlines():
+        m = LAYERS_LINE.match(line.strip())
+        if m:
+            rows.append({
+                "pos": m.group(1),
+                "max_diff": m.group(2),
+                "rel_diff": m.group(6),
+                "status": m.group(7),
+            })
+    return rows
+
+
+def layers_table(manifest, results_dir):
+    """Return a markdown summary table for the layer comparison.
+
+    Shows: worst-layer rel diff, post-norm rel diff, logits rel diff, status.
+    """
+    all_rows = []
+    for variant in manifest["variants"]:
+        slug = variant["repo_id"].replace("/", "--")
+        result_path = results_dir / slug / "layers.json"
+        if not result_path.exists():
+            continue
+        with open(result_path) as f:
+            result = json.load(f)
+        if result["exit_code"] != 0:
+            all_rows.append((variant["repo_id"], None, "errored"))
+            continue
+
+        rows = parse_layers(result["stdout"])
+        if not rows:
+            all_rows.append((variant["repo_id"], None, "no output"))
+            continue
+
+        layer_rows = [r for r in rows if r["pos"].startswith("layer")]
+        post_norm = next((r for r in rows if r["pos"] == "post-norm"), None)
+        logits = next((r for r in rows if r["pos"] == "logits"), None)
+
+        worst = max(layer_rows, key=lambda r: float(r["rel_diff"].rstrip("%"))) if layer_rows else None
+        diverged = [r for r in layer_rows if r["status"] == "DIVERGED"]
+
+        all_rows.append((variant["repo_id"], {
+            "worst_layer": f"{worst['pos']} ({worst['rel_diff']})" if worst else "-",
+            "diverged_count": str(len(diverged)),
+            "post_norm": post_norm["rel_diff"] if post_norm else "-",
+            "logits": logits["rel_diff"] if logits else "-",
+            "logits_max_diff": logits["max_diff"] if logits else "-",
+        }, None))
+
+    if not all_rows:
+        return None
+
+    lines = [
+        "| Variant | Worst layer | Diverged | Post-norm | Logits rel | Logits max diff |",
+        "|---|---|---|---|---|---|",
+    ]
+    for repo_id, m, error in all_rows:
+        anchor = _anchor(repo_id)
+        if error:
+            lines.append(f"| [`{repo_id}`](#{anchor}) | — | — | — | — | _{error}_ |")
+        else:
+            lines.append(
+                f"| [`{repo_id}`](#{anchor}) | {m['worst_layer']} | "
+                f"{m['diverged_count']} | {m['post_norm']} | "
+                f"{m['logits']} | {m['logits_max_diff']} |"
             )
     return "\n".join(lines)
 
@@ -389,6 +484,11 @@ def write_summary(manifest, results_dir, sha):
     quant_pred_table = predictions_table(manifest, results_dir, suffix="_quant")
     if quant_pred_table:
         lines += ["## Numerical comparison after quantization", "", quant_pred_table, ""]
+
+    # Layer comparison summary table
+    layer_table = layers_table(manifest, results_dir)
+    if layer_table:
+        lines += ["## Layer-by-layer comparison", "", layer_table, ""]
 
     # Per-variant detail
     for variant in manifest["variants"]:
@@ -542,7 +642,7 @@ def main():
         results_dir = Path(args.results_dir)
     else:
         timestamp = datetime.now().strftime("%Y-%m-%dT%H%M%S")
-        results_dir = TEST_HARNESS_ROOT / "results" / f"pr-{pr_num}" / f"{short_sha}-{timestamp}"
+        results_dir = TEST_HARNESS_ROOT / "results" / f"pr-{pr_num}" / f"{timestamp}-{short_sha}"
     results_dir.mkdir(parents=True, exist_ok=True)
 
     # Archive scripts + manifest + write reproduction notes

@@ -54,24 +54,35 @@ def _inner(model):
 # Wrapping helper
 # ---------------------------------------------------------------------------
 
-class _Capture:
-    """Callable wrapper that records the (first) output of `wrapped`.
+def _make_capture(wrapped, sink):
+    """Create a capture wrapper that passes ``isinstance`` checks.
 
-    Attribute access is forwarded to the wrapped object so that callers
-    that read layer flags (e.g. `layer.use_sliding`) keep working.
+    Hybrid models (e.g. OLMo Hybrid) dispatch different masks to
+    different layer types via ``isinstance``.  A plain wrapper class
+    would break those checks.  We solve this by dynamically creating a
+    subclass of the wrapped object's class that overrides ``__call__``
+    to record the output, and ``__getattr__`` for forwarding.
     """
-    def __init__(self, wrapped, sink):
-        object.__setattr__(self, "wrapped", wrapped)
-        object.__setattr__(self, "sink", sink)
+    base = type(wrapped)
 
-    def __call__(self, *args, **kwargs):
-        out = self.wrapped(*args, **kwargs)
-        hidden = out[0] if isinstance(out, tuple) else out
-        self.sink.append(hidden)
-        return out
+    class _Capture(base):
+        def __init_subclass__(cls, **kw):
+            pass
 
-    def __getattr__(self, name):
-        return getattr(self.wrapped, name)
+        def __init__(self):
+            # Skip base __init__; we proxy everything to `wrapped`.
+            pass
+
+        def __call__(self, *args, **kwargs):
+            out = wrapped(*args, **kwargs)
+            hidden = out[0] if isinstance(out, tuple) else out
+            sink.append(hidden)
+            return out
+
+        def __getattr__(self, name):
+            return getattr(wrapped, name)
+
+    return _Capture()
 
 
 # ---------------------------------------------------------------------------
@@ -105,6 +116,9 @@ def collect_transformers_states(model_path, input_ids, dtype):
     # Skip [0] (embedding), take [1:] (layer outputs + post-norm)
     states = [h[0].float().numpy() for h in outputs.hidden_states[1:]]
 
+    # Append logits (first batch element, matching hidden states above)
+    states.append(outputs.logits[0].float().numpy())
+
     del model, outputs
     gc.collect()
     return states
@@ -117,8 +131,9 @@ def collect_transformers_states(model_path, input_ids, dtype):
 def collect_mlx_states(model_path, input_ids):
     """Return (states, dtype_str).
 
-    states = [post-layer-0, ..., post-layer-(N-1), post-final-norm].
-    Length = N + 1 if final norm exists, N otherwise.
+    states = [post-layer-0, ..., post-layer-(N-2), post-final-norm, logits].
+    The last layer output is replaced with the post-final-norm state to
+    match transformers' ``output_hidden_states`` convention.
     """
     import mlx.core as mx
     from mlx_lm import load
@@ -139,7 +154,7 @@ def collect_mlx_states(model_path, input_ids):
 
     try:
         for i in range(len(layers)):
-            layers[i] = _Capture(original_layers[i], captured)
+            layers[i] = _make_capture(original_layers[i], captured)
 
         inputs = mx.array([input_ids], dtype=mx.int32)
         out = model(inputs)
@@ -147,12 +162,16 @@ def collect_mlx_states(model_path, input_ids):
         for h in captured:
             mx.eval(h)
 
-        # Align with transformers: hidden_states[-1] is post-final-norm,
-        # not the raw output of the last layer. Replace to match.
+        # Transformers' output_hidden_states replaces the last layer
+        # output with the post-final-norm state.  Do the same here.
         if hasattr(inner, "norm") and captured:
             normed = inner.norm(captured[-1])
             mx.eval(normed)
             captured[-1] = normed
+
+        # Append logits [batch, seq, vocab] — h[0] below strips the batch dim
+        mx.eval(out)
+        captured.append(out)
     finally:
         for i in range(len(layers)):
             layers[i] = original_layers[i]
@@ -182,11 +201,13 @@ def compare(t_states, mlx_states, num_layers):
     for i in range(n):
         t, mlx_ = t_states[i], mlx_states[i]
 
-        # Label: layer outputs, then post-norm
+        # Label: layer outputs, post-norm, logits
         if i < num_layers:
             lbl = f"layer {i}"
+        elif i == num_layers:
+            lbl = "post-norm"
         else:
-            lbl = "final*"
+            lbl = "logits"
 
         if t.shape != mlx_.shape:
             print(f"{lbl:<10} SHAPE MISMATCH  T={t.shape}  MLX={mlx_.shape}")
@@ -245,9 +266,9 @@ def main():
     t_dtype = args.t_dtype or mlx_dtype
     t_states = collect_transformers_states(args.model_path, input_ids, t_dtype)
 
-    # Number of decoder layers = total states minus the post-norm entry.
-    # If MLX didn't find a final norm, all states are layer outputs.
-    num_layers = len(mlx_states) - 1 if len(mlx_states) == len(t_states) else len(mlx_states)
+    # Both sides: [layer outputs..., post-norm, logits].
+    # Number of decoder layers = total - 2 (post-norm + logits).
+    num_layers = len(mlx_states) - 2 if len(mlx_states) == len(t_states) else len(mlx_states)
 
     print(f"\nCollected {len(t_states)} transformers states, {len(mlx_states)} MLX states "
           f"(transformers dtype={t_dtype}, MLX dtype={mlx_dtype})")
