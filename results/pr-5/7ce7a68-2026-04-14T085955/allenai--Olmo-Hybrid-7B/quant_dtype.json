@@ -1,0 +1,6 @@
+{
+  "command": "/Users/pedro/code/one-click-mlx/test-harness/work/pr-5/7ce7a68/.venv/bin/python /Users/pedro/code/one-click-mlx/test-harness/harness/check_dtype.py /Users/pedro/code/one-click-mlx/test-harness/work/pr-5/7ce7a68/quantized/allenai--Olmo-Hybrid-7B bfloat16",
+  "exit_code": 0,
+  "stdout": "{\n  \"output_dtype\": \"mlx.core.bfloat16\",\n  \"expected_dtype\": \"mlx.core.bfloat16\",\n  \"match\": true\n}\n",
+  "stderr": ""
+}

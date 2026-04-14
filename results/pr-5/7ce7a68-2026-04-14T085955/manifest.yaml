@@ -1,0 +1,20 @@
+version: 1
+pr:
+  number: 5
+  repo: pcuenca/mlx-lm
+  branch: olmo-hybrid-v2
+model_type: olmo_hybrid
+variants:
+  - repo_id: allenai/Olmo-Hybrid-7B
+    type: base
+    memory_gb: 15
+    expected_dtype: bfloat16
+  - repo_id: allenai/Olmo-Hybrid-Instruct-SFT-7B
+    type: instruct
+    memory_gb: 15
+    expected_dtype: bfloat16
+quantize: true
+notes: >
+  DPO variant uses NoPE (rope_theta: null) while base/SFT/Think-SFT use
+  RoPE with theta=10000. The numerical comparison at 100+ tokens should
+  catch any RoPE misconfiguration across variants.
