@@ -1,6 +1,6 @@
 # mlx-lm-tests
 
-This is a test harness for transformers-to-mlx model conversions. It is designed to be run on conversions performed by the transformers-to-mlx Skill, but it is not agentic - tests run deterministically instead of driven by an LLM.
+Test harness for transformers-to-mlx model conversions. It is designed to be run on conversions performed by the [transformers-to-mlx Skill](https://github.com/huggingface/transformers-to-mlx), but it is not agentic - tests run deterministically instead of driven by an LLM.
 
 Why?
 
