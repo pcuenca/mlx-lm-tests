@@ -1,0 +1,6 @@
+{
+  "command": "/Users/pedro/code/bailing_hybrid/mlx-lm-tests/work/pr-1227/4d4758d/.venv/bin/mlx_lm.convert --hf-path inclusionAI/Ling-2.6-flash -q --q-bits 4 --mlx-path /Users/pedro/code/bailing_hybrid/mlx-lm-tests/work/pr-1227/4d4758d/quantized/inclusionAI--Ling-2.6-flash --trust-remote-code",
+  "exit_code": 0,
+  "stdout": "[INFO] Loading\n[INFO] Using dtype: bfloat16\n[INFO] Quantizing\n[INFO] Quantized model with 4.501 bits per weight.\n",
+  "stderr": "\nFetching 36 files:   0%|          | 0/36 [00:00<?, ?it/s]\nFetching 36 files: 100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 36/36 [00:00<00:00, 5165.58it/s]\n[transformers] You are using a model of type `bailing_hybrid` to instantiate a model of type ``. This may be expected if you are loading a checkpoint that shares a subset of the architecture (e.g., loading a `sam2_video` checkpoint into `Sam2Model`), but is otherwise not supported and can yield errors. Please verify that the checkpoint is compatible with the model you are instantiating.\n"
+}

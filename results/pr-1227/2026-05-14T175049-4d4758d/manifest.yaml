@@ -1,0 +1,28 @@
+version: 1
+pr:
+  number: 1227
+  repo: ivanfioravanti/mlx-lm
+  branch: add-ling-2.6-flash
+model_type: bailing_hybrid
+trust_remote_code: true
+transformers_version: 4.56.2
+extra_pip:
+  - flash-linear-attention>=0.5.0
+variants:
+  - repo_id: inclusionAI/Ling-2.6-flash
+    type: instruct
+    memory_gb: 208
+    expected_dtype: bfloat16
+quantize: true
+notes: >
+  bailing_hybrid (BailingMoeV2_5) is not in transformers yet — the model loads
+  only with trust_remote_code=True via the auto_map in config.json. Hybrid
+  architecture: 1:7 ratio of MLA to Lightning-style linear attention (MLA at
+  layers 7/15/23/31), plus sigmoid noaux_tc MoE (256 experts, 1 shared,
+  group-limited top-8). Particular things to eyeball:
+    - Layer-by-layer comparison: linear-attention layers can drift more than
+      MLA layers; check whether divergence is concentrated at MLA boundaries.
+    - sanitize() drops the trailing MTP layer and stacks MoE experts; if
+      weight loading is off, expect catastrophic logits divergence.
+    - rope_theta is 6e6 with partial_rotary_factor 0.5 — RoPE
+      misconfiguration shows up after ~100 tokens.

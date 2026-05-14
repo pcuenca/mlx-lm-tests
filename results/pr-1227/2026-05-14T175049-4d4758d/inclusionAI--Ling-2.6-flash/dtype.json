@@ -1,0 +1,6 @@
+{
+  "command": "/Users/pedro/code/bailing_hybrid/mlx-lm-tests/work/pr-1227/4d4758d/.venv/bin/python /Users/pedro/code/bailing_hybrid/mlx-lm-tests/harness/check_dtype.py inclusionAI/Ling-2.6-flash bfloat16 --trust-remote-code",
+  "exit_code": 0,
+  "stdout": "{\n  \"output_dtype\": \"mlx.core.bfloat16\",\n  \"expected_dtype\": \"mlx.core.bfloat16\",\n  \"match\": true\n}\n",
+  "stderr": "\nFetching 36 files:   0%|          | 0/36 [00:00<?, ?it/s]\nFetching 36 files: 100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 36/36 [00:00<00:00, 4676.50it/s]\n[transformers] You are using a model of type `bailing_hybrid` to instantiate a model of type ``. This may be expected if you are loading a checkpoint that shares a subset of the architecture (e.g., loading a `sam2_video` checkpoint into `Sam2Model`), but is otherwise not supported and can yield errors. Please verify that the checkpoint is compatible with the model you are instantiating.\n"
+}
