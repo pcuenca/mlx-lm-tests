@@ -121,13 +121,17 @@ def load_reference_states(path):
 def collect_transformers_states(model_path, input_ids, dtype, trust_remote_code=False):
     """Return layer outputs as numpy arrays.
 
-    `outputs.hidden_states` layout:
-      - [0] = pre-layer-0 (embedding + pre-processing)
-      - [i] = pre-layer-i = post-layer-(i-1)   for 1 <= i <= N-1
-      - [N] = post-final-norm
+    `outputs.hidden_states` layout (for the common "append-before-layer"
+    convention used by Llama, BailingMoeV2_5, etc.):
+      - [0]               = embedding (input to layer 0)
+      - [i] for 1<=i<=N-1 = input to layer i (= output of layer i-1)
+      - [N]               = post-final-norm
+      - [N+1..]           = optional model-specific extras (e.g. MTP layer
+                            outputs in BailingMoeV2_5)
 
-    We return [post-layer-0, ..., post-layer-(N-2), post-final-norm],
-    i.e., hidden_states[1:].  Length = N.
+    We return [layer_0_out, ..., layer_{N-2}_out, post-final-norm, logits]
+    by slicing hidden_states[1:N+1] explicitly so we skip anything appended
+    after the post-final-norm.
     """
     import torch
     from transformers import AutoModelForCausalLM
@@ -145,10 +149,12 @@ def collect_transformers_states(model_path, input_ids, dtype, trust_remote_code=
     with torch.no_grad():
         outputs = model(inputs, output_hidden_states=True)
 
-    # Skip [0] (embedding), take [1:] (layer outputs + post-norm)
-    states = [h[0].float().numpy() for h in outputs.hidden_states[1:]]
+    num_hidden_layers = model.config.num_hidden_layers
+    states = [
+        h[0].float().numpy()
+        for h in outputs.hidden_states[1 : num_hidden_layers + 1]
+    ]
 
-    # Append logits (first batch element, matching hidden states above)
     states.append(outputs.logits[0].float().numpy())
 
     del model, outputs
@@ -328,21 +334,6 @@ def main():
             args.model_path, input_ids, t_dtype,
             trust_remote_code=args.trust_remote_code,
         )
-
-    # Align transformers/MLX state counts. Two reasons they may differ by 1:
-    #   - Models whose modeling code returns N+2 hidden_states (un-normed last
-    #     layer AND post-final-norm separately, e.g. BailingMoeV2_5) — the
-    #     live transformers path picks up both, but MLX's collect_mlx_states
-    #     replaces the last captured layer with post-norm.
-    #   - Legacy references produced by an earlier compute_reference.py that
-    #     saved the un-normed last layer in addition to post_norm.
-    # Either way, drop the un-normed last layer (third-from-end: just before
-    # post_norm and logits) so the two lists have the same shape.
-    if len(t_states) == len(mlx_states) + 1:
-        print(f"\nNote: dropping un-normed last layer from transformers states "
-              f"({len(t_states)} -> {len(t_states) - 1}) to match MLX's "
-              f"post-norm convention.")
-        t_states.pop(-3)
 
     # Both sides: [layer outputs..., post-norm, logits].
     # Number of decoder layers = total - 2 (post-norm + logits).

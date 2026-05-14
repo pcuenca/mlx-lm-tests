@@ -4,7 +4,7 @@
 - **Branch:** `add-ling-2.6-flash`
 - **Commit:** [`4d4758dca32f03b66bf3224e5be030b61e4e9237`](https://github.com/ivanfioravanti/mlx-lm/commit/4d4758dca32f03b66bf3224e5be030b61e4e9237)
 - **Model type:** `bailing_hybrid`
-- **Timestamp:** 2026-05-14T15:54:14+00:00
+- **Timestamp:** 2026-05-14T16:49:36+00:00
 
 ## Numerical comparison (transformers vs MLX)
 
@@ -16,7 +16,7 @@
 
 | Variant | Worst layer | Diverged | Post-norm | Logits rel | Logits max diff |
 |---|---|---|---|---|---|
-| [`inclusionAI/Ling-2.6-flash`](#inclusionailing-26-flash) | layer 27 (3.52%) | 0 | 79.74% | 6.25% | 1.6562 |
+| [`inclusionAI/Ling-2.6-flash`](#inclusionailing-26-flash) | layer 27 (3.52%) | 0 | 3.55% | 6.25% | 1.6562 |
 
 ## inclusionAI/Ling-2.6-flash
 
@@ -59,8 +59,8 @@ The sentence is broken down into units the model understands (tokens).
 **2. Adding Embeddings**
 Each token is converted into a high-dimensional vector (Embedding). This captures the meaning of
 ==========
-Prompt: 32 tokens, 98.514 tokens-per-sec
-Generation: 200 tokens, 40.024 tokens-per-sec
+Prompt: 32 tokens, 98.472 tokens-per-sec
+Generation: 200 tokens, 40.103 tokens-per-sec
 Peak memory: 214.816 GB
 ````
 </details>
@@ -75,7 +75,7 @@ Prompt: 'The quick brown fox jumps over the lazy dog. This sentence contains eve
 trust_remote_code: True
 reference_from: /Users/pedro/code/bailing_hybrid/mlx-lm-tests/work/pr-1227/4d4758d/references/inclusionAI--Ling-2.6-flash/numerical.safetensors
 Token count: 81 (from reference)
-Reference metadata: {'torch_version': '2.12.0+cu130', 'num_hidden_layers': '32', 'prompt': 'The quick brown fox jumps over the lazy dog. This sentence contains every letter of the English alphabet at least once and has been used as a typing exercise for over a century. In the world of computing, pangrams like this one serve a practical purpose beyond mere amusement. They help test fonts, keyboards, and text rendering systems by exercising the full range of characters that a system must support. Similar sentences', 'compute_dtype': 'bfloat16', 'generated_at': '2026-05-14T15:45:41+00:00', 'model': 'inclusionAI/Ling-2.6-flash', 'transformers_version': '4.56.2'}
+Reference metadata: {'num_hidden_layers': '32', 'transformers_version': '4.56.2', 'model': 'inclusionAI/Ling-2.6-flash', 'compute_dtype': 'bfloat16', 'generated_at': '2026-05-14T16:45:41+00:00', 'prompt': 'The quick brown fox jumps over the lazy dog. This sentence contains every letter of the English alphabet at least once and has been used as a typing exercise for over a century. In the world of computing, pangrams like this one serve a practical purpose beyond mere amusement. They help test fonts, keyboards, and text rendering systems by exercising the full range of characters that a system must support. Similar sentences', 'torch_version': '2.12.0+cu130'}
 Loading MLX model...
 
 Collected 33 transformers states, 33 MLX states (transformers dtype=bfloat16, MLX dtype=bfloat16)
@@ -113,10 +113,10 @@ layer 27      16.0000     0.3586     454.00     450.00     3.52%  warn
 layer 28      16.0000     0.3965     464.00     466.00     3.45%  warn
 layer 29      20.0000     0.4332     720.00     724.00     2.78%  warn
 layer 30      28.0000     0.4746    2272.00    2272.00     1.23%  warn
-post-norm     61.0000     0.6407      76.50      68.50    79.74%  DIVERGED
+post-norm      2.4297     0.0558      68.50      68.50     3.55%  warn
 logits         1.6562     0.1251      26.50      27.00     6.25%  warn
 
-First significant divergence at final* (>10% of signal magnitude).
+All layers within tolerance (<10% of signal magnitude).
 ````
 </details>
 
@@ -451,8 +451,8 @@ Let me know if you'd like to add:
 
 Happy coding! 🚀
 ==========
-Prompt: 31 tokens, 96.005 tokens-per-sec
-Generation: 2300 tokens, 39.690 tokens-per-sec
+Prompt: 31 tokens, 98.141 tokens-per-sec
+Generation: 2300 tokens, 39.694 tokens-per-sec
 Peak memory: 214.816 GB
 ````
 </details>
@@ -469,7 +469,7 @@ trust_remote_code: True
 reference_from: /Users/pedro/code/bailing_hybrid/mlx-lm-tests/work/pr-1227/4d4758d/references/inclusionAI--Ling-2.6-flash/numerical.safetensors
 
 Loaded reference: 81 tokens, logits shape (1, 81, 157184)
-Reference metadata: {'prompt': 'The quick brown fox jumps over the lazy dog. This sentence contains every letter of the English alphabet at least once and has been used as a typing exercise for over a century. In the world of computing, pangrams like this one serve a practical purpose beyond mere amusement. They help test fonts, keyboards, and text rendering systems by exercising the full range of characters that a system must support. Similar sentences', 'compute_dtype': 'bfloat16', 'num_hidden_layers': '32', 'transformers_version': '4.56.2', 'model': 'inclusionAI/Ling-2.6-flash', 'torch_version': '2.12.0+cu130', 'generated_at': '2026-05-14T15:45:41+00:00'}
+Reference metadata: {'model': 'inclusionAI/Ling-2.6-flash', 'generated_at': '2026-05-14T16:45:41+00:00', 'transformers_version': '4.56.2', 'torch_version': '2.12.0+cu130', 'prompt': 'The quick brown fox jumps over the lazy dog. This sentence contains every letter of the English alphabet at least once and has been used as a typing exercise for over a century. In the world of computing, pangrams like this one serve a practical purpose beyond mere amusement. They help test fonts, keyboards, and text rendering systems by exercising the full range of characters that a system must support. Similar sentences', 'num_hidden_layers': '32', 'compute_dtype': 'bfloat16'}
 Loading MLX model...
 
 Tokens (HF):  [678, 3901, 13187, 46998, 40977, 997, 268, 27028, 7339, 13, 1077, 9606, 6543, 1380, 7885, 300, 268, 6212, 38574, 482, 3390, 3779, 301, 723, 1007, 1440, 409, 259, 28748, 8625, 352, 997, 259, 9685, 13, 718, 268, 1931, 300, 18359, 11, 282, 780, 46130, 1029, 501, 810, 7987, 259, 11012, 6189, 7267, 11616, 62911, 13, 2240, 1376, 1620, 42143, 11, 83419, 11, 301, 3019, 28613, 4519, 527, 43670, 268, 2771, 3278, 300, 7114, 378, 259, 1652, 2022, 1869, 13, 29340, 21356]
@@ -568,8 +568,8 @@ The first step is to convert the sentence into a format the computer can underst
 *   **Special Tokens:** Special markers are added:
     *   `[CLS]` (Classification token) is added at the beginning
 ==========
-Prompt: 32 tokens, 294.426 tokens-per-sec
-Generation: 200 tokens, 74.500 tokens-per-sec
+Prompt: 32 tokens, 298.588 tokens-per-sec
+Generation: 200 tokens, 74.786 tokens-per-sec
 Peak memory: 58.709 GB
 ````
 </details>
